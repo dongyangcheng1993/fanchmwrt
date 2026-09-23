@@ -1,4 +1,4 @@
-name: Build FanchmWrt for Timecloud
+name: Build Pure
 
 on:
   workflow_dispatch:
@@ -6,85 +6,32 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y build-essential clang flex bison g++ gawk \
-            gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
-            python3-setuptools rsync swig unzip zlib1g-dev file wget
+          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib gperf libssl-dev make libncurses5-dev libelf-dev python3-dev python3-setuptools python3-pip python-is-python3 rsync unzip zlib1g-dev file wget gettext ocaml-nox ocamlbuild sharutils uuid-dev liblz4-tool libgmp3-dev libmpfr-dev libmpc-dev libzstd-dev
 
       - name: Update feeds
         run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Apply Timecloud LAN-only patch
-        run: |
-          mkdir -p package/base-files/files/etc/uci-defaults
-          
-          cat > package/base-files/files/etc/uci-defaults/99-timecloud-lanonly <<'UCI'
-          #!/bin/sh
-          uci -q batch <<EOF
-          set network.lan=interface
-          set network.lan.ifname='eth0'
-          set network.lan.proto='static'
-          set network.lan.ipaddr='192.168.1.111'
-          set network.lan.netmask='255.255.255.0'
-          set network.lan.gateway='192.168.1.1'
-          set network.lan.dns='192.168.1.1'
-          set network.lan.type='bridge'
-          set network.lan.force_link='1'
-          delete network.wan
-          delete network.wan6
-          EOF
-          uci -q set dhcp.lan.ignore='1'
-          uci commit
-          exit 0
-          UCI
-          
-          cat > package/base-files/files/etc/uci-defaults/98-timecloud-firewall <<'FW'
-          #!/bin/sh
-          uci -q batch <<EOF
-          set firewall.@zone[0].forward='ACCEPT'
-          set firewall.@zone[0].input='ACCEPT'
-          set firewall.@zone[0].output='ACCEPT'
-          set firewall.@zone[0].name='lan'
-          set firewall.@zone[0].masq='0'
-          EOF
-          uci commit
-          exit 0
-          FW
-          
-          chmod +x package/base-files/files/etc/uci-defaults/*
-
-      - name: Configure minimal for Timecloud
+      - name: Configure
         run: |
           cat > .config <<'EOF'
           CONFIG_TARGET_ramips=y
           CONFIG_TARGET_ramips_mt7621=y
           CONFIG_TARGET_ramips_mt7621_thunder_timecloud=y
-          CONFIG_PACKAGE_kmod-usb-core=y
-          CONFIG_PACKAGE_kmod-usb-xhci-mtk=y
-          CONFIG_PACKAGE_kmod-usb-storage=y
-          CONFIG_PACKAGE_kmod-usb-storage-uas=y
-          CONFIG_PACKAGE_kmod-scsi-core=y
-          CONFIG_PACKAGE_kmod-fs-ext4=y
-          CONFIG_PACKAGE_luci=y
-          CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
-          CONFIG_PACKAGE_block-mount=y
+          CONFIG_LUCI=y
           EOF
           make defconfig
 
       - name: Download
-        run: make download -j8
+        run: make download -j$(nproc)
 
       - name: Build
         run: make -j$(nproc)
@@ -92,5 +39,5 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fanchmwrt-timecloud
+          name: fanchmwrt-pure
           path: bin/targets/ramips/mt7621/*.bin
